@@ -3,13 +3,38 @@
 MVP da Fase 1 (ver `blueprint-plataforma-canil-3bpm.md`): cadastros base, registro de apreensão
 em campo (PWA offline-first) e painel web de validação/indicadores.
 
+## Produção
+
+- **App/painel:** https://canil-3bpm-web.vercel.app
+- **API:** https://canil-3bpm-api.onrender.com/api
+
+Hospedagem 100% sem custo, uso interno do pelotão — não depende de nenhuma máquina local ligada:
+
+| Camada               | Onde roda                  |
+| -------------------- | --------------------------- |
+| Frontend (Next.js)   | Vercel (free tier)           |
+| Backend (NestJS)     | Render (free tier)           |
+| Banco (Postgres+PostGIS) | Supabase (free tier)     |
+| Storage de fotos     | Supabase Storage (free tier) |
+
+Deploy automático a cada push na branch `main` (Vercel e Render conectados ao GitHub
+`NexusLabSystems/canil-3bpm`).
+
+> **Cold start:** o tier free do Render hiberna o backend após ~15 min sem requisições. A
+> primeira chamada depois disso demora ~30–50s pra "acordar" — normal, não é bug.
+
 ## Estrutura
 
 - `backend/` — API NestJS + Prisma (PostgreSQL).
 - `web/` — Next.js (App Router). Mesma aplicação serve o app de campo do condutor (PWA) e o
   painel do comandante/admin, separados por rota e por perfil de login.
 
-## Pré-requisitos
+## Desenvolvimento local
+
+As instruções abaixo são pra rodar/alterar o projeto na sua máquina. Para produção, ver a
+seção acima — Vercel/Render já fazem deploy automático a cada push.
+
+### Pré-requisitos
 
 - Node.js 20+ (testado com Node 24).
 - Um projeto Supabase (Postgres + Storage), free tier — uso interno do pelotão, sem custo.
@@ -48,6 +73,16 @@ npm run dev   # ajuste a porta com -p se o backend já usar a 3000
 ```
 
 `web/.env.local` define `NEXT_PUBLIC_API_URL` apontando para a API do backend.
+
+## Deploy
+
+- **Backend (Render):** `render.yaml` na raiz define o serviço como Blueprint. No dashboard do
+  Render, conectar o repo e preencher as variáveis secretas (`DATABASE_URL`, `JWT_SECRET`,
+  `MINIO_ENDPOINT`, `MINIO_BUCKET`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`,
+  `STORAGE_PUBLIC_URL`) com os mesmos valores do `backend/.env`.
+- **Frontend (Vercel):** importar o repo, Root Directory = `web`, variável de ambiente
+  `NEXT_PUBLIC_API_URL=https://canil-3bpm-api.onrender.com/api`.
+- Push na `main` redeploya os dois automaticamente.
 
 ## O que já funciona (Fase 1)
 
