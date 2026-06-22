@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: canil-3bpm-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && npm run start:prod
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 15m
+      - key: MINIO_ENDPOINT
+        sync: false
+      - key: MINIO_BUCKET
+        sync: false
+      - key: MINIO_ACCESS_KEY
+        sync: false
+      - key: MINIO_SECRET_KEY
+        sync: false
+      - key: STORAGE_PUBLIC_URL
+        sync: false
