@@ -1,0 +1,284 @@
+// Schema da Plataforma de Apreensões do Canil (3º BPM)
+// Fase 1 (MVP): cadastros base, binômios, ocorrências e apreensões.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------- Enums ----------
+
+enum PerfilUsuario {
+  CONDUTOR
+  COMANDANTE
+  ADMIN
+}
+
+enum SexoCao {
+  MACHO
+  FEMEA
+}
+
+enum StatusCao {
+  ATIVO
+  EM_TREINAMENTO
+  AFASTADO
+  REFORMADO
+}
+
+enum TipoApreensao {
+  ENTORPECENTE
+  ARMA
+  MUNICAO
+  DINHEIRO
+  VEICULO
+  OUTROS
+}
+
+enum StatusApreensao {
+  RASCUNHO
+  PENDENTE_REVISAO
+  VALIDADA
+  DEVOLVIDA
+}
+
+// ---------- Tabelas de apoio (lookups) ----------
+// Regra de ouro do modelo: nada de texto livre onde puder haver lista padronizada.
+
+model Especialidade {
+  id        String  @id @default(uuid())
+  nome      String  @unique
+  ativo     Boolean @default(true)
+  caes      Cao[]
+}
+
+model TipoSubstancia {
+  id          String                  @id @default(uuid())
+  nome        String                  @unique
+  ativo       Boolean                 @default(true)
+  entorpecentes ApreensaoEntorpecente[]
+}
+
+model TipoArma {
+  id     String          @id @default(uuid())
+  nome   String          @unique
+  ativo  Boolean         @default(true)
+  armas  ApreensaoArma[]
+}
+
+model TipoOcorrencia {
+  id          String       @id @default(uuid())
+  nome        String       @unique
+  ativo       Boolean      @default(true)
+  ocorrencias Ocorrencia[]
+}
+
+// ---------- Cadastros base ----------
+
+model Cao {
+  id              String        @id @default(uuid())
+  nome            String
+  raca            String
+  sexo            SexoCao
+  dataNascimento  DateTime
+  registro        String        @unique // número de registro / microchip
+  especialidadeId String
+  especialidade   Especialidade @relation(fields: [especialidadeId], references: [id])
+  status          StatusCao     @default(ATIVO)
+  fotoUrl         String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  binomios   Binomio[]
+  apreensoes Apreensao[]
+}
+
+model Condutor {
+  id             String  @id @default(uuid())
+  postoGraduacao String
+  nomeGuerra     String
+  matricula      String  @unique
+  ativo          Boolean @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  usuario  User?
+  binomios Binomio[]
+}
+
+model User {
+  id           String        @id @default(uuid())
+  username     String        @unique
+  passwordHash String
+  perfil       PerfilUsuario
+  ativo        Boolean       @default(true)
+  condutorId   String?       @unique
+  condutor     Condutor?     @relation(fields: [condutorId], references: [id])
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  ocorrenciasCriadas Ocorrencia[] @relation("OcorrenciaCriadaPor")
+  apreensoesCriadas  Apreensao[]  @relation("ApreensaoCriadaPor")
+  apreensoesRevisadas Apreensao[] @relation("ApreensaoRevisadaPor")
+  auditoria          LogAuditoria[]
+}
+
+// Par condutor + cão, com período de vigência.
+// Preserva o histórico: uma apreensão antiga continua atribuída
+// ao binômio (condutor) que era responsável na época.
+model Binomio {
+  id          String    @id @default(uuid())
+  condutorId  String
+  condutor    Condutor  @relation(fields: [condutorId], references: [id])
+  caoId       String
+  cao         Cao       @relation(fields: [caoId], references: [id])
+  dataInicio  DateTime
+  dataFim     DateTime?
+  createdAt   DateTime  @default(now())
+
+  ocorrencias OcorrenciaBinomio[]
+  apreensoes  Apreensao[]
+
+  @@index([caoId])
+  @@index([condutorId])
+}
+
+// ---------- Ocorrências / Operações ----------
+
+enum TipoEventoOcorrencia {
+  OPERACAO_PROGRAMADA
+  OCORRENCIA_PATRULHAMENTO
+  APOIO_OUTRA_UNIDADE
+}
+
+model Ocorrencia {
+  id               String                @id @default(uuid())
+  tipoEvento       TipoEventoOcorrencia
+  tipoOcorrenciaId String
+  tipoOcorrencia   TipoOcorrencia        @relation(fields: [tipoOcorrenciaId], references: [id])
+  dataHora         DateTime
+  latitude         Float
+  longitude        Float
+  numeroBO         String?
+  criadoPorId      String
+  criadoPor        User                  @relation("OcorrenciaCriadaPor", fields: [criadoPorId], references: [id])
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  binomios   OcorrenciaBinomio[]
+  apreensoes Apreensao[]
+
+  @@index([dataHora])
+}
+
+// Equipe envolvida: um ou mais binômios por ocorrência.
+model OcorrenciaBinomio {
+  id           String     @id @default(uuid())
+  ocorrenciaId String
+  ocorrencia   Ocorrencia @relation(fields: [ocorrenciaId], references: [id])
+  binomioId    String
+  binomio      Binomio    @relation(fields: [binomioId], references: [id])
+
+  @@unique([ocorrenciaId, binomioId])
+}
+
+// ---------- Apreensões ----------
+// Entidade central: sempre ligada a uma ocorrência e ao cão que fez a detecção.
+
+model Apreensao {
+  id             String          @id @default(uuid())
+  ocorrenciaId   String
+  ocorrencia     Ocorrencia      @relation(fields: [ocorrenciaId], references: [id])
+  caoId          String
+  cao            Cao             @relation(fields: [caoId], references: [id])
+  binomioId      String
+  binomio        Binomio         @relation(fields: [binomioId], references: [id])
+  tipo           TipoApreensao
+  valorEstimado  Decimal?        @db.Decimal(14, 2)
+  latitude       Float
+  longitude      Float
+  horario        DateTime
+  status         StatusApreensao @default(RASCUNHO)
+
+  criadoPorId    String
+  criadoPor      User            @relation("ApreensaoCriadaPor", fields: [criadoPorId], references: [id])
+  revisadoPorId  String?
+  revisadoPor    User?           @relation("ApreensaoRevisadaPor", fields: [revisadoPorId], references: [id])
+  revisadoEm     DateTime?
+  observacaoRevisao String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fotos         ApreensaoFoto[]
+  entorpecente  ApreensaoEntorpecente?
+  arma          ApreensaoArma?
+  municao       ApreensaoMunicao?
+  outro         ApreensaoOutro?
+
+  @@index([caoId])
+  @@index([binomioId])
+  @@index([horario])
+  @@index([status])
+}
+
+model ApreensaoFoto {
+  id          String    @id @default(uuid())
+  apreensaoId String
+  apreensao   Apreensao @relation(fields: [apreensaoId], references: [id])
+  url         String
+  createdAt   DateTime  @default(now())
+}
+
+// Campos específicos por tipo de apreensão.
+
+model ApreensaoEntorpecente {
+  apreensaoId           String         @id
+  apreensao             Apreensao      @relation(fields: [apreensaoId], references: [id])
+  tipoSubstanciaId      String
+  tipoSubstancia        TipoSubstancia @relation(fields: [tipoSubstanciaId], references: [id])
+  pesoQuantidade        Decimal        @db.Decimal(12, 3)
+  formaAcondicionamento String
+}
+
+model ApreensaoArma {
+  apreensaoId String    @id
+  apreensao   Apreensao @relation(fields: [apreensaoId], references: [id])
+  tipoArmaId  String
+  tipoArma    TipoArma  @relation(fields: [tipoArmaId], references: [id])
+  calibre     String?
+  marca       String?
+  numeracao   String?
+}
+
+model ApreensaoMunicao {
+  apreensaoId String    @id
+  apreensao   Apreensao @relation(fields: [apreensaoId], references: [id])
+  calibre     String
+  quantidade  Int
+}
+
+// Cobre dinheiro / veículo / outros: descrição e valor.
+model ApreensaoOutro {
+  apreensaoId String    @id
+  apreensao   Apreensao @relation(fields: [apreensaoId], references: [id])
+  descricao   String
+}
+
+// ---------- Auditoria ----------
+
+model LogAuditoria {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  acao      String // ex: CREATE, UPDATE, DELETE
+  entidade  String // ex: Apreensao, Cao
+  entidadeId String
+  detalhes  Json?
+  createdAt DateTime @default(now())
+
+  @@index([entidade, entidadeId])
+}
