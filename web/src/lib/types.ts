@@ -87,3 +87,14 @@ export interface Apreensao extends Omit<ApreensaoPayload, 'fotos'> {
   ocorrencia: Ocorrencia;
   fotos: { id: string; url: string }[];
 }
+
+export interface LogAuditoria {
+  id: string;
+  userId: string;
+  acao: string;
+  entidade: string;
+  entidadeId: string;
+  detalhes: Record<string, unknown> | null;
+  createdAt: string;
+  user: { username: string; perfil: PerfilUsuario };
+}

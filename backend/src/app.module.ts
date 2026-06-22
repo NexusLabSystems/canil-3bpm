@@ -11,6 +11,7 @@ import { BinomiosModule } from './binomios/binomios.module';
 import { OcorrenciasModule } from './ocorrencias/ocorrencias.module';
 import { ApreensoesModule } from './apreensoes/apreensoes.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { AuditoriaModule } from './auditoria/auditoria.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { UploadsModule } from './uploads/uploads.module';
     OcorrenciasModule,
     ApreensoesModule,
     UploadsModule,
+    AuditoriaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

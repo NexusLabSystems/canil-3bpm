@@ -16,6 +16,8 @@ const LINKS = [
   { href: '/painel/cadastros/lookups', rotulo: 'Listas de apoio' },
 ];
 
+const LINK_AUDITORIA = { href: '/painel/auditoria', rotulo: 'Auditoria' };
+
 export default function PainelLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -41,7 +43,7 @@ export default function PainelLayout({ children }: { children: React.ReactNode }
             </span>
           </Link>
           <div className="hidden gap-4 md:flex">
-            {LINKS.map((link) => (
+            {[...LINKS, ...(sessao?.perfil === 'ADMIN' ? [LINK_AUDITORIA] : [])].map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
