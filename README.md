@@ -107,3 +107,7 @@ npm run dev   # ajuste a porta com -p se o backend já usar a 3000
 - **URLs de fotos públicas**: o bucket do Supabase Storage está com leitura anônima liberada (ok
   para uso interno). Se algum dia envolver dados mais sensíveis, considerar URLs pré-assinadas
   com expiração.
+
+Painel (https://canil-3bpm-web.vercel.app/painel/dashboard): logue como comandante / comandante123 — vai ver dashboard com KPIs, evolução mensal, rankings, mapa de calor populado e caixa de validação com itens pendentes de verdade.
+Cadastros: 5 cães (status variados — ativo, em treinamento, afastado), 5 condutores, 5 binômios. O ícone de cruz na lista de cães mostra vacina vencida em alguns.
+App de campo: pode logar com qualquer um dos condutores de teste — marcossilva, julianacosta, rafaellima, brunoalves — senha teste123 — pra ver o histórico deles também.
