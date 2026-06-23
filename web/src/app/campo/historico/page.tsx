@@ -93,6 +93,9 @@ export default function HistoricoPage() {
               <span className="text-xs text-canil-text-muted">{STATUS_ROTULO[a.status]}</span>
             </div>
             <p className="text-xs text-canil-text-muted">{new Date(a.horario).toLocaleString('pt-BR')}</p>
+            {a.localAproximado && (
+              <p className="text-xs text-amber-400">Local aproximado (registro tardio)</p>
+            )}
             {a.fotos.length > 0 && (
               <div className="mt-2 flex gap-2">
                 {a.fotos.map((f) => (

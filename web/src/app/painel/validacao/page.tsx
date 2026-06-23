@@ -51,6 +51,11 @@ export default function ValidacaoPage() {
                   {new Date(a.horario).toLocaleString('pt-BR')} · binômio{' '}
                   {a.binomio?.condutor?.nomeGuerra}
                 </p>
+                {a.localAproximado && (
+                  <p className="text-xs text-amber-400">
+                    Local aproximado — registrado fora do local/momento da ocorrência
+                  </p>
+                )}
               </div>
               <div className="flex gap-2">
                 <button

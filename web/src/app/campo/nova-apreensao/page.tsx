@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSessao } from '@/lib/use-sessao';
@@ -10,6 +11,13 @@ import { useLookup } from '@/lib/use-lookup';
 import { registrarApreensao } from '@/lib/offline-queue';
 import { limparSessao } from '@/lib/auth';
 import type { RegistroCampoPayload, TipoApreensao, TipoEventoOcorrencia } from '@/lib/types';
+
+const MapaPinArrastavel = dynamic(() => import('./mapa-pin-arrastavel'), { ssr: false });
+
+// Fallback quando o GPS falhar e o condutor escolher registro tardio sem
+// nenhuma coordenada disponível ainda: centro aproximado do Brasil, só
+// pra dar um ponto de partida pro pino ser arrastado até o lugar certo.
+const COORDS_PADRAO = { latitude: -15.78, longitude: -47.93 };
 
 const TIPOS: { valor: TipoApreensao; rotulo: string }[] = [
   { valor: 'ENTORPECENTE', rotulo: 'Entorpecente' },
@@ -30,10 +38,13 @@ export default function NovaApreensaoPage() {
   const router = useRouter();
   const sessao = useSessao(['CONDUTOR']);
   const { binomio, erro: erroBinomio } = useBinomioAtivo();
-  const { coords, erro: erroGps } = useGeolocalizacao();
+  const { coords, erro: erroGps, buscando: buscandoGps, tentarNovamente: tentarGpsNovamente } = useGeolocalizacao();
   const tiposSubstancia = useLookup('tipos-substancia');
   const tiposArma = useLookup('tipos-arma');
   const tiposOcorrencia = useLookup('tipos-ocorrencia');
+
+  const [registroTardio, setRegistroTardio] = useState(false);
+  const [localManual, setLocalManual] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const [tipo, setTipo] = useState<TipoApreensao | null>(null);
   const [tipoEvento, setTipoEvento] = useState<TipoEventoOcorrencia>('OCORRENCIA_PATRULHAMENTO');
@@ -55,13 +66,21 @@ export default function NovaApreensaoPage() {
 
   if (!sessao) return null;
 
+  const coordsEfetivas = registroTardio ? localManual : coords;
+
+  function handleToggleRegistroTardio() {
+    if (!registroTardio) setLocalManual(coords ?? COORDS_PADRAO);
+    setRegistroTardio((v) => !v);
+  }
+
   function montarApreensao(): RegistroCampoPayload['apreensao'] | null {
-    if (!tipo || !coords) return null;
+    if (!tipo || !coordsEfetivas) return null;
 
     const base = {
       tipo,
-      latitude: coords.latitude,
-      longitude: coords.longitude,
+      latitude: coordsEfetivas.latitude,
+      longitude: coordsEfetivas.longitude,
+      localAproximado: registroTardio,
       horario: new Date().toISOString(),
       valorEstimado: valorEstimado ? Number(valorEstimado) : undefined,
     };
@@ -128,6 +147,8 @@ export default function NovaApreensaoPage() {
       );
       setTipo(null);
       setFoto(null);
+      setRegistroTardio(false);
+      setLocalManual(null);
     } catch {
       setMensagem({ tipo: 'erro', texto: 'Erro ao registrar a apreensão. Tente novamente.' });
     } finally {
@@ -164,12 +185,44 @@ export default function NovaApreensaoPage() {
       </header>
 
       {erroBinomio && <p className="rounded bg-red-950 p-2 text-sm text-red-300">{erroBinomio}</p>}
-      {erroGps && <p className="rounded bg-amber-950 p-2 text-sm text-amber-300">{erroGps}</p>}
-      {coords && (
-        <p className="text-xs text-canil-text-muted">
-          GPS: {coords.latitude.toFixed(5)}, {coords.longitude.toFixed(5)}
-        </p>
-      )}
+
+      <section className="space-y-2">
+        <label className="flex items-center gap-2 text-sm text-canil-text-muted">
+          <input type="checkbox" checked={registroTardio} onChange={handleToggleRegistroTardio} />
+          Registro tardio (fora do local da ocorrência)
+        </label>
+
+        {registroTardio ? (
+          localManual && (
+            <MapaPinArrastavel
+              latitude={localManual.latitude}
+              longitude={localManual.longitude}
+              onChange={setLocalManual}
+            />
+          )
+        ) : (
+          <>
+            {erroGps && (
+              <div className="flex items-center justify-between gap-2 rounded bg-amber-950 p-2 text-sm text-amber-300">
+                <span>{erroGps}</span>
+                <button
+                  type="button"
+                  onClick={tentarGpsNovamente}
+                  disabled={buscandoGps}
+                  className="shrink-0 rounded border border-amber-700 px-2 py-1 text-xs font-medium disabled:opacity-50"
+                >
+                  {buscandoGps ? 'Buscando...' : 'Tentar novamente'}
+                </button>
+              </div>
+            )}
+            {coords && (
+              <p className="text-xs text-canil-text-muted">
+                GPS: {coords.latitude.toFixed(5)}, {coords.longitude.toFixed(5)}
+              </p>
+            )}
+          </>
+        )}
+      </section>
 
       <section className="space-y-2">
         <label className="text-sm text-canil-text-muted">Tipo de evento</label>
@@ -340,7 +393,7 @@ export default function NovaApreensaoPage() {
 
       <button
         type="button"
-        disabled={!tipo || !coords || enviando}
+        disabled={!tipo || !coordsEfetivas || enviando}
         onClick={handleSubmit}
         className="mt-auto w-full rounded-md bg-canil-gold text-canil-bg px-4 py-3 text-base font-semibold disabled:opacity-50"
       >

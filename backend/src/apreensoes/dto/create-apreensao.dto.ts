@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -80,6 +81,10 @@ export class CreateApreensaoDto {
 
   @IsDateString()
   horario: string;
+
+  @IsOptional()
+  @IsBoolean()
+  localAproximado?: boolean;
 
   @IsOptional()
   @IsArray()

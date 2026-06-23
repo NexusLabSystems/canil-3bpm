@@ -200,6 +200,11 @@ model Apreensao {
   valorEstimado  Decimal?        @db.Decimal(14, 2)
   latitude       Float
   longitude      Float
+  // true quando o condutor registrou fora do local/momento da ocorrência
+  // (ex.: de volta no canil) e ajustou o pino manualmente no mapa, em vez
+  // de usar o GPS automático — sinaliza ao comandante que a coordenada é
+  // uma estimativa, não a captura exata do instante da apreensão.
+  localAproximado Boolean        @default(false)
   horario        DateTime
   status         StatusApreensao @default(RASCUNHO)
 

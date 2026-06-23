@@ -59,6 +59,9 @@ export interface ApreensaoPayload {
   valorEstimado?: number;
   latitude: number;
   longitude: number;
+  // true quando o local foi ajustado manualmente (registro tardio, fora
+  // do local/momento da ocorrência) em vez de capturado por GPS.
+  localAproximado?: boolean;
   horario: string;
   fotos?: string[];
   entorpecente?: { tipoSubstanciaId: string; pesoQuantidade: number; formaAcondicionamento: string };
