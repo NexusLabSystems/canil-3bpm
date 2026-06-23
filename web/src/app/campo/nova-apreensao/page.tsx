@@ -10,6 +10,7 @@ import { useGeolocalizacao } from '@/lib/use-geolocalizacao';
 import { useLookup } from '@/lib/use-lookup';
 import { registrarApreensao } from '@/lib/offline-queue';
 import { limparSessao } from '@/lib/auth';
+import { ApiError } from '@/lib/api';
 import type { RegistroCampoPayload, TipoApreensao, TipoEventoOcorrencia } from '@/lib/types';
 
 const MapaPinArrastavel = dynamic(() => import('./mapa-pin-arrastavel'), { ssr: false });
@@ -60,9 +61,9 @@ export default function NovaApreensaoPage() {
   const [foto, setFoto] = useState<File | null>(null);
 
   const [enviando, setEnviando] = useState(false);
-  const [mensagem, setMensagem] = useState<{ tipo: 'ok' | 'offline' | 'erro'; texto: string } | null>(
-    null,
-  );
+  const [mensagem, setMensagem] = useState<
+    { tipo: 'ok' | 'offline' | 'erro'; texto: string; sessaoExpirada?: boolean } | null
+  >(null);
 
   if (!sessao) return null;
 
@@ -149,8 +150,17 @@ export default function NovaApreensaoPage() {
       setFoto(null);
       setRegistroTardio(false);
       setLocalManual(null);
-    } catch {
-      setMensagem({ tipo: 'erro', texto: 'Erro ao registrar a apreensão. Tente novamente.' });
+    } catch (erro) {
+      if (erro instanceof ApiError && erro.status === 401) {
+        limparSessao();
+        setMensagem({
+          tipo: 'erro',
+          texto: 'Sua sessão expirou. Faça login novamente — os dados preenchidos foram mantidos na tela.',
+          sessaoExpirada: true,
+        });
+      } else {
+        setMensagem({ tipo: 'erro', texto: 'Erro ao registrar a apreensão. Tente novamente.' });
+      }
     } finally {
       setEnviando(false);
     }
@@ -378,7 +388,7 @@ export default function NovaApreensaoPage() {
       )}
 
       {mensagem && (
-        <p
+        <div
           className={`rounded p-2 text-sm ${
             mensagem.tipo === 'ok'
               ? 'bg-canil-bg-elevated text-canil-gold'
@@ -387,8 +397,17 @@ export default function NovaApreensaoPage() {
                 : 'bg-red-950 text-red-300'
           }`}
         >
-          {mensagem.texto}
-        </p>
+          <p>{mensagem.texto}</p>
+          {mensagem.sessaoExpirada && (
+            <button
+              type="button"
+              onClick={() => router.push('/login')}
+              className="mt-2 rounded border border-red-400 px-3 py-1 text-xs font-medium"
+            >
+              Fazer login novamente
+            </button>
+          )}
+        </div>
       )}
 
       <button
