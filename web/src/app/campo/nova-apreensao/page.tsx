@@ -35,6 +35,28 @@ const TIPOS_EVENTO: { valor: TipoEventoOcorrencia; rotulo: string }[] = [
   { valor: 'APOIO_OUTRA_UNIDADE', rotulo: 'Apoio a outra unidade' },
 ];
 
+interface DetalheTipo {
+  valorEstimado: string;
+  tipoSubstanciaId: string;
+  pesoQuantidade: string;
+  formaAcondicionamento: string;
+  tipoArmaId: string;
+  calibre: string;
+  quantidadeMunicao: string;
+  descricaoOutro: string;
+}
+
+const DETALHE_VAZIO: DetalheTipo = {
+  valorEstimado: '',
+  tipoSubstanciaId: '',
+  pesoQuantidade: '',
+  formaAcondicionamento: '',
+  tipoArmaId: '',
+  calibre: '',
+  quantidadeMunicao: '',
+  descricaoOutro: '',
+};
+
 export default function NovaApreensaoPage() {
   const router = useRouter();
   const sessao = useSessao(['CONDUTOR']);
@@ -47,17 +69,15 @@ export default function NovaApreensaoPage() {
   const [registroTardio, setRegistroTardio] = useState(false);
   const [localManual, setLocalManual] = useState<{ latitude: number; longitude: number } | null>(null);
 
-  const [tipo, setTipo] = useState<TipoApreensao | null>(null);
   const [tipoEvento, setTipoEvento] = useState<TipoEventoOcorrencia>('OCORRENCIA_PATRULHAMENTO');
   const [tipoOcorrenciaId, setTipoOcorrenciaId] = useState('');
-  const [tipoSubstanciaId, setTipoSubstanciaId] = useState('');
-  const [pesoQuantidade, setPesoQuantidade] = useState('');
-  const [formaAcondicionamento, setFormaAcondicionamento] = useState('');
-  const [tipoArmaId, setTipoArmaId] = useState('');
-  const [calibre, setCalibre] = useState('');
-  const [quantidadeMunicao, setQuantidadeMunicao] = useState('');
-  const [descricaoOutro, setDescricaoOutro] = useState('');
-  const [valorEstimado, setValorEstimado] = useState('');
+  const [numeroBO, setNumeroBO] = useState('');
+
+  // Uma ocorrência pode ter mais de um item apreendido (arma + veículo +
+  // entorpecente, por exemplo), então o condutor seleciona vários tipos e
+  // preenche os detalhes de cada um separadamente.
+  const [tiposSelecionados, setTiposSelecionados] = useState<TipoApreensao[]>([]);
+  const [detalhesPorTipo, setDetalhesPorTipo] = useState<Partial<Record<TipoApreensao, DetalheTipo>>>({});
   const [foto, setFoto] = useState<File | null>(null);
 
   const [enviando, setEnviando] = useState(false);
@@ -74,41 +94,68 @@ export default function NovaApreensaoPage() {
     setRegistroTardio((v) => !v);
   }
 
-  function montarApreensao(): RegistroCampoPayload['apreensao'] | null {
-    if (!tipo || !coordsEfetivas) return null;
+  function handleToggleTipo(tipo: TipoApreensao) {
+    setTiposSelecionados((atual) =>
+      atual.includes(tipo) ? atual.filter((t) => t !== tipo) : [...atual, tipo],
+    );
+    setDetalhesPorTipo((atual) => (atual[tipo] ? atual : { ...atual, [tipo]: { ...DETALHE_VAZIO } }));
+  }
 
-    const base = {
-      tipo,
-      latitude: coordsEfetivas.latitude,
-      longitude: coordsEfetivas.longitude,
-      localAproximado: registroTardio,
-      horario: new Date().toISOString(),
-      valorEstimado: valorEstimado ? Number(valorEstimado) : undefined,
-    };
+  function atualizarDetalhe(tipo: TipoApreensao, campo: keyof DetalheTipo, valor: string) {
+    setDetalhesPorTipo((atual) => ({
+      ...atual,
+      [tipo]: { ...(atual[tipo] ?? DETALHE_VAZIO), [campo]: valor },
+    }));
+  }
 
-    switch (tipo) {
-      case 'ENTORPECENTE':
-        if (!tipoSubstanciaId || !pesoQuantidade) return null;
-        return {
-          ...base,
-          entorpecente: {
-            tipoSubstanciaId,
-            pesoQuantidade: Number(pesoQuantidade),
-            formaAcondicionamento,
-          },
-        };
-      case 'ARMA':
-        if (!tipoArmaId) return null;
-        return { ...base, arma: { tipoArmaId, calibre } };
-      case 'MUNICAO':
-        if (!calibre || !quantidadeMunicao) return null;
-        return { ...base, municao: { calibre, quantidade: Number(quantidadeMunicao) } };
-      case 'DINHEIRO':
-      case 'VEICULO':
-      case 'OUTROS':
-        if (!descricaoOutro) return null;
-        return { ...base, outro: { descricao: descricaoOutro } };
+  function montarApreensoes(): RegistroCampoPayload['apreensoes'] | null {
+    if (tiposSelecionados.length === 0 || !coordsEfetivas) return null;
+
+    const lista: RegistroCampoPayload['apreensoes'] = [];
+
+    for (const tipo of tiposSelecionados) {
+      const d = detalhesPorTipo[tipo];
+      if (!d) return null;
+
+      const base = {
+        tipo,
+        latitude: coordsEfetivas.latitude,
+        longitude: coordsEfetivas.longitude,
+        localAproximado: registroTardio,
+        horario: new Date().toISOString(),
+        valorEstimado: d.valorEstimado ? Number(d.valorEstimado) : undefined,
+      };
+
+      switch (tipo) {
+        case 'ENTORPECENTE':
+          if (!d.tipoSubstanciaId || !d.pesoQuantidade) return null;
+          lista.push({
+            ...base,
+            entorpecente: {
+              tipoSubstanciaId: d.tipoSubstanciaId,
+              pesoQuantidade: Number(d.pesoQuantidade),
+              formaAcondicionamento: d.formaAcondicionamento,
+            },
+          });
+          break;
+        case 'ARMA':
+          if (!d.tipoArmaId) return null;
+          lista.push({ ...base, arma: { tipoArmaId: d.tipoArmaId, calibre: d.calibre } });
+          break;
+        case 'MUNICAO':
+          if (!d.calibre || !d.quantidadeMunicao) return null;
+          lista.push({ ...base, municao: { calibre: d.calibre, quantidade: Number(d.quantidadeMunicao) } });
+          break;
+        case 'DINHEIRO':
+        case 'VEICULO':
+        case 'OUTROS':
+          if (!d.descricaoOutro) return null;
+          lista.push({ ...base, outro: { descricao: d.descricaoOutro } });
+          break;
+      }
     }
+
+    return lista;
   }
 
   async function handleSubmit() {
@@ -117,9 +164,9 @@ export default function NovaApreensaoPage() {
       return;
     }
 
-    const apreensao = montarApreensao();
-    if (!apreensao) {
-      setMensagem({ tipo: 'erro', texto: 'Preencha os campos obrigatórios do tipo selecionado.' });
+    const apreensoes = montarApreensoes();
+    if (!apreensoes) {
+      setMensagem({ tipo: 'erro', texto: 'Preencha os campos obrigatórios de cada item selecionado.' });
       return;
     }
 
@@ -133,7 +180,8 @@ export default function NovaApreensaoPage() {
           binomioId: binomio.id,
           tipoEvento,
           tipoOcorrenciaId,
-          apreensao,
+          numeroBO: numeroBO || undefined,
+          apreensoes,
         },
         foto ?? undefined,
       );
@@ -146,7 +194,9 @@ export default function NovaApreensaoPage() {
               texto: 'Sem sinal: apreensão (e foto, se houver) guardada no aparelho e será enviada automaticamente quando a rede voltar.',
             },
       );
-      setTipo(null);
+      setTiposSelecionados([]);
+      setDetalhesPorTipo({});
+      setNumeroBO('');
       setFoto(null);
       setRegistroTardio(false);
       setLocalManual(null);
@@ -261,18 +311,28 @@ export default function NovaApreensaoPage() {
             </option>
           ))}
         </select>
+
+        <label className="text-sm text-canil-text-muted">Número do BO/TCO (se já tiver)</label>
+        <input
+          placeholder="Pode completar depois, se ainda não tiver"
+          value={numeroBO}
+          onChange={(e) => setNumeroBO(e.target.value)}
+          className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
+        />
       </section>
 
       <section className="space-y-2">
-        <p className="text-sm text-canil-text-muted">O que foi apreendido?</p>
+        <p className="text-sm text-canil-text-muted">
+          O que foi apreendido? <span className="text-xs">(pode marcar mais de um)</span>
+        </p>
         <div className="grid grid-cols-2 gap-2">
           {TIPOS.map((t) => (
             <button
               key={t.valor}
               type="button"
-              onClick={() => setTipo(t.valor)}
+              onClick={() => handleToggleTipo(t.valor)}
               className={`rounded-lg border px-4 py-6 text-base font-medium ${
-                tipo === t.valor
+                tiposSelecionados.includes(t.valor)
                   ? 'border-canil-gold bg-canil-bg-elevated text-canil-gold'
                   : 'border-canil-border bg-canil-bg-elevated text-canil-text'
               }`}
@@ -283,99 +343,109 @@ export default function NovaApreensaoPage() {
         </div>
       </section>
 
-      {tipo === 'ENTORPECENTE' && (
-        <section className="space-y-2">
-          <select
-            value={tipoSubstanciaId}
-            onChange={(e) => setTipoSubstanciaId(e.target.value)}
-            className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
-          >
-            <option value="">Substância...</option>
-            {tiposSubstancia.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nome}
-              </option>
-            ))}
-          </select>
-          <input
-            type="number"
-            inputMode="decimal"
-            placeholder="Peso/quantidade estimado (g)"
-            value={pesoQuantidade}
-            onChange={(e) => setPesoQuantidade(e.target.value)}
-            className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
-          />
-          <input
-            placeholder="Forma de acondicionamento (pode completar depois)"
-            value={formaAcondicionamento}
-            onChange={(e) => setFormaAcondicionamento(e.target.value)}
-            className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
-          />
-        </section>
-      )}
+      {tiposSelecionados.map((tipo) => {
+        const d = detalhesPorTipo[tipo] ?? DETALHE_VAZIO;
+        const rotulo = TIPOS.find((t) => t.valor === tipo)?.rotulo ?? tipo;
 
-      {tipo === 'ARMA' && (
-        <section className="space-y-2">
-          <select
-            value={tipoArmaId}
-            onChange={(e) => setTipoArmaId(e.target.value)}
-            className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
-          >
-            <option value="">Tipo de arma...</option>
-            {tiposArma.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.nome}
-              </option>
-            ))}
-          </select>
-          <input
-            placeholder="Calibre (opcional)"
-            value={calibre}
-            onChange={(e) => setCalibre(e.target.value)}
-            className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
-          />
-        </section>
-      )}
+        return (
+          <section key={tipo} className="space-y-2 rounded-lg border border-canil-border p-3">
+            <p className="text-sm font-semibold text-canil-gold">{rotulo}</p>
 
-      {tipo === 'MUNICAO' && (
-        <section className="space-y-2">
-          <input
-            placeholder="Calibre"
-            value={calibre}
-            onChange={(e) => setCalibre(e.target.value)}
-            className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
-          />
-          <input
-            type="number"
-            placeholder="Quantidade"
-            value={quantidadeMunicao}
-            onChange={(e) => setQuantidadeMunicao(e.target.value)}
-            className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
-          />
-        </section>
-      )}
+            {tipo === 'ENTORPECENTE' && (
+              <>
+                <select
+                  value={d.tipoSubstanciaId}
+                  onChange={(e) => atualizarDetalhe(tipo, 'tipoSubstanciaId', e.target.value)}
+                  className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
+                >
+                  <option value="">Substância...</option>
+                  {tiposSubstancia.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nome}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="Peso/quantidade estimado (g)"
+                  value={d.pesoQuantidade}
+                  onChange={(e) => atualizarDetalhe(tipo, 'pesoQuantidade', e.target.value)}
+                  className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
+                />
+                <input
+                  placeholder="Forma de acondicionamento (pode completar depois)"
+                  value={d.formaAcondicionamento}
+                  onChange={(e) => atualizarDetalhe(tipo, 'formaAcondicionamento', e.target.value)}
+                  className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
+                />
+              </>
+            )}
 
-      {(tipo === 'DINHEIRO' || tipo === 'VEICULO' || tipo === 'OUTROS') && (
-        <section className="space-y-2">
-          <textarea
-            placeholder="Descrição"
-            value={descricaoOutro}
-            onChange={(e) => setDescricaoOutro(e.target.value)}
-            className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
-          />
-        </section>
-      )}
+            {tipo === 'ARMA' && (
+              <>
+                <select
+                  value={d.tipoArmaId}
+                  onChange={(e) => atualizarDetalhe(tipo, 'tipoArmaId', e.target.value)}
+                  className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
+                >
+                  <option value="">Tipo de arma...</option>
+                  {tiposArma.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nome}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  placeholder="Calibre (opcional)"
+                  value={d.calibre}
+                  onChange={(e) => atualizarDetalhe(tipo, 'calibre', e.target.value)}
+                  className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
+                />
+              </>
+            )}
 
-      {tipo && (
+            {tipo === 'MUNICAO' && (
+              <>
+                <input
+                  placeholder="Calibre"
+                  value={d.calibre}
+                  onChange={(e) => atualizarDetalhe(tipo, 'calibre', e.target.value)}
+                  className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
+                />
+                <input
+                  type="number"
+                  placeholder="Quantidade"
+                  value={d.quantidadeMunicao}
+                  onChange={(e) => atualizarDetalhe(tipo, 'quantidadeMunicao', e.target.value)}
+                  className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
+                />
+              </>
+            )}
+
+            {(tipo === 'DINHEIRO' || tipo === 'VEICULO' || tipo === 'OUTROS') && (
+              <textarea
+                placeholder="Descrição"
+                value={d.descricaoOutro}
+                onChange={(e) => atualizarDetalhe(tipo, 'descricaoOutro', e.target.value)}
+                className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
+              />
+            )}
+
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="Valor estimado em R$ (opcional)"
+              value={d.valorEstimado}
+              onChange={(e) => atualizarDetalhe(tipo, 'valorEstimado', e.target.value)}
+              className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
+            />
+          </section>
+        );
+      })}
+
+      {tiposSelecionados.length > 0 && (
         <section className="space-y-2">
-          <input
-            type="number"
-            inputMode="decimal"
-            placeholder="Valor estimado em R$ (opcional)"
-            value={valorEstimado}
-            onChange={(e) => setValorEstimado(e.target.value)}
-            className="w-full rounded-md border border-canil-border bg-canil-bg-elevated px-3 py-2"
-          />
           <input
             type="file"
             accept="image/*"
@@ -412,7 +482,7 @@ export default function NovaApreensaoPage() {
 
       <button
         type="button"
-        disabled={!tipo || !coordsEfetivas || enviando}
+        disabled={tiposSelecionados.length === 0 || !coordsEfetivas || enviando}
         onClick={handleSubmit}
         className="mt-auto w-full rounded-md bg-canil-gold text-canil-bg px-4 py-3 text-base font-semibold disabled:opacity-50"
       >

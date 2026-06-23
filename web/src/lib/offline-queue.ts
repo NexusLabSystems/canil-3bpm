@@ -38,12 +38,13 @@ export async function listarFila() {
 }
 
 async function enviarRegistro(payload: RegistroCampoPayload, fotoBlob?: Blob) {
-  const { caoId, binomioId, tipoEvento, tipoOcorrenciaId, numeroBO, apreensao } = payload;
+  const { caoId, binomioId, tipoEvento, tipoOcorrenciaId, numeroBO, apreensoes } = payload;
+  const [primeira] = apreensoes;
 
-  const fotos = [...(apreensao.fotos ?? [])];
+  let fotoUrl: string | undefined;
   if (fotoBlob) {
     const { url } = await uploadFoto(fotoBlob, 'apreensao.jpg');
-    fotos.push(url);
+    fotoUrl = url;
   }
 
   const ocorrencia = await apiFetch<Ocorrencia>('/ocorrencias', {
@@ -52,17 +53,25 @@ async function enviarRegistro(payload: RegistroCampoPayload, fotoBlob?: Blob) {
       tipoEvento,
       tipoOcorrenciaId,
       numeroBO,
-      dataHora: apreensao.horario,
-      latitude: apreensao.latitude,
-      longitude: apreensao.longitude,
+      dataHora: primeira.horario,
+      latitude: primeira.latitude,
+      longitude: primeira.longitude,
       binomioIds: [binomioId],
     }),
   });
 
-  await apiFetch('/apreensoes', {
-    method: 'POST',
-    body: JSON.stringify({ ...apreensao, fotos, caoId, binomioId, ocorrenciaId: ocorrencia.id }),
-  });
+  // Uma ocorrência pode ter mais de um item apreendido (ex.: arma, veículo
+  // e entorpecente juntos) — cada um gera sua própria apreensão, ligada à
+  // mesma ocorrência.
+  for (const apreensao of apreensoes) {
+    const fotos = [...(apreensao.fotos ?? [])];
+    if (fotoUrl) fotos.push(fotoUrl);
+
+    await apiFetch('/apreensoes', {
+      method: 'POST',
+      body: JSON.stringify({ ...apreensao, fotos, caoId, binomioId, ocorrenciaId: ocorrencia.id }),
+    });
+  }
 }
 
 // Tenta enviar direto à API; se falhar por falta de rede, guarda na fila

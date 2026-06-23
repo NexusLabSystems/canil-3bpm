@@ -70,15 +70,17 @@ export interface ApreensaoPayload {
   outro?: { descricao: string };
 }
 
-// Registro de campo: a tela de "nova apreensão" cria a ocorrência e a
-// apreensão juntas, num único gesto do condutor (ver blueprint seção 5.1).
+// Registro de campo: a tela de "nova apreensão" cria a ocorrência e a(s)
+// apreensão(ões) juntas, num único gesto do condutor (ver blueprint seção
+// 5.1). Uma mesma ocorrência pode render mais de um item (ex.: arma,
+// veículo e entorpecente apreendidos juntos), por isso é uma lista.
 export interface RegistroCampoPayload {
   caoId: string;
   binomioId: string;
   tipoEvento: TipoEventoOcorrencia;
   tipoOcorrenciaId: string;
   numeroBO?: string;
-  apreensao: Omit<ApreensaoPayload, 'ocorrenciaId' | 'caoId' | 'binomioId'>;
+  apreensoes: Omit<ApreensaoPayload, 'ocorrenciaId' | 'caoId' | 'binomioId'>[];
 }
 
 export interface Apreensao extends Omit<ApreensaoPayload, 'fotos'> {
