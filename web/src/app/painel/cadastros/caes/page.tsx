@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSessao } from '@/lib/use-sessao';
 import { apiFetch, ApiError } from '@/lib/api';
 import type { Cao, Lookup } from '@/lib/types';
+import { IconCruz } from '../../../icons';
 
 const STATUS_OPCOES = ['ATIVO', 'EM_TREINAMENTO', 'AFASTADO', 'REFORMADO'];
 
@@ -204,8 +205,8 @@ export default function CaesPage() {
                   )}
                 </td>
                 <td className="p-3">
-                  <Link href={`/painel/cadastros/caes/${c.id}`} className="text-sm text-canil-gold">
-                    Ver saúde
+                  <Link href={`/painel/cadastros/caes/${c.id}`} title="Ver saúde" className="text-canil-gold">
+                    <IconCruz className="h-5 w-5" />
                   </Link>
                 </td>
               </tr>
