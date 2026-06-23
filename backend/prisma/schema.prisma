@@ -92,8 +92,38 @@ model Cao {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  binomios   Binomio[]
-  apreensoes Apreensao[]
+  binomios       Binomio[]
+  apreensoes     Apreensao[]
+  registrosSaude RegistroSaudeCao[]
+}
+
+// Controle de saúde/veterinário do cão (blueprint Fase 3): vacinas,
+// consultas e exames, com data de aplicação/realização e, quando
+// aplicável, a próxima data prevista (próxima dose, retorno).
+enum TipoRegistroSaude {
+  VACINA
+  CONSULTA
+  EXAME
+  OUTRO
+}
+
+model RegistroSaudeCao {
+  id          String            @id @default(uuid())
+  caoId       String
+  cao         Cao               @relation(fields: [caoId], references: [id])
+  tipo        TipoRegistroSaude
+  descricao   String
+  data        DateTime
+  proximaData DateTime?
+  veterinario String?
+  observacoes String?
+
+  criadoPorId String
+  criadoPor   User     @relation("RegistroSaudeCriadoPor", fields: [criadoPorId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([caoId])
+  @@index([tipo])
 }
 
 model Condutor {
@@ -124,6 +154,7 @@ model User {
   apreensoesCriadas  Apreensao[]  @relation("ApreensaoCriadaPor")
   apreensoesRevisadas Apreensao[] @relation("ApreensaoRevisadaPor")
   auditoria          LogAuditoria[]
+  registrosSaudeCriados RegistroSaudeCao[] @relation("RegistroSaudeCriadoPor")
 }
 
 // Par condutor + cão, com período de vigência.

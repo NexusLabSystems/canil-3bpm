@@ -9,7 +9,16 @@ export class CaesService {
 
   findAll() {
     return this.prisma.cao.findMany({
-      include: { especialidade: true },
+      include: {
+        especialidade: true,
+        // Só a última vacina de cada cão, pra dar pra sinalizar "vencida"
+        // na listagem sem precisar abrir o histórico completo de cada um.
+        registrosSaude: {
+          where: { tipo: 'VACINA' },
+          orderBy: { data: 'desc' },
+          take: 1,
+        },
+      },
       orderBy: { nome: 'asc' },
     });
   }

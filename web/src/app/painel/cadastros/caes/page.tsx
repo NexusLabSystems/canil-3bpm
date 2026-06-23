@@ -1,11 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useSessao } from '@/lib/use-sessao';
 import { apiFetch, ApiError } from '@/lib/api';
 import type { Cao, Lookup } from '@/lib/types';
 
 const STATUS_OPCOES = ['ATIVO', 'EM_TREINAMENTO', 'AFASTADO', 'REFORMADO'];
+
+function vacinaInfo(cao: Cao): { texto: string; vencida: boolean } | null {
+  const ultima = cao.registrosSaude?.[0];
+  if (!ultima) return null;
+  if (!ultima.proximaData) return { texto: 'Sem próxima dose registrada', vencida: false };
+  const vencida = new Date(ultima.proximaData) < new Date();
+  return {
+    texto: `Próxima dose: ${new Date(ultima.proximaData).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}`,
+    vencida,
+  };
+}
 
 export default function CaesPage() {
   const sessao = useSessao(['COMANDANTE', 'ADMIN']);
@@ -152,37 +164,56 @@ export default function CaesPage() {
             <th className="p-3">Nome</th>
             <th className="p-3">Raça</th>
             <th className="p-3">Especialidade</th>
+            <th className="p-3">Vacinação</th>
             <th className="p-3">Status</th>
+            <th className="p-3" />
           </tr>
         </thead>
         <tbody>
-          {caes.map((c) => (
-            <tr key={c.id} className="border-b border-canil-border last:border-0">
-              <td className="p-3 font-medium text-canil-text">{c.nome}</td>
-              <td className="p-3 text-canil-text-muted">{c.raca}</td>
-              <td className="p-3 text-canil-text-muted">{c.especialidade?.nome}</td>
-              <td className="p-3">
-                {podeEditar ? (
-                  <select
-                    value={c.status}
-                    onChange={(e) => handleStatusChange(c.id, e.target.value)}
-                    className="rounded border border-canil-border bg-canil-bg px-2 py-1 text-canil-text"
-                  >
-                    {STATUS_OPCOES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className="text-canil-text-muted">{c.status}</span>
-                )}
-              </td>
-            </tr>
-          ))}
+          {caes.map((c) => {
+            const vacina = vacinaInfo(c);
+            return (
+              <tr key={c.id} className="border-b border-canil-border last:border-0">
+                <td className="p-3 font-medium text-canil-text">{c.nome}</td>
+                <td className="p-3 text-canil-text-muted">{c.raca}</td>
+                <td className="p-3 text-canil-text-muted">{c.especialidade?.nome}</td>
+                <td className="p-3">
+                  {vacina ? (
+                    <span className={`text-xs ${vacina.vencida ? 'text-red-400' : 'text-canil-text-muted'}`}>
+                      {vacina.vencida ? 'Vacina vencida' : vacina.texto}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-amber-400">Sem registro de vacina</span>
+                  )}
+                </td>
+                <td className="p-3">
+                  {podeEditar ? (
+                    <select
+                      value={c.status}
+                      onChange={(e) => handleStatusChange(c.id, e.target.value)}
+                      className="rounded border border-canil-border bg-canil-bg px-2 py-1 text-canil-text"
+                    >
+                      {STATUS_OPCOES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-canil-text-muted">{c.status}</span>
+                  )}
+                </td>
+                <td className="p-3">
+                  <Link href={`/painel/cadastros/caes/${c.id}`} className="text-sm text-canil-gold">
+                    Ver saúde
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
           {caes.length === 0 && (
             <tr>
-              <td colSpan={4} className="p-3 text-center text-canil-text-muted">
+              <td colSpan={6} className="p-3 text-center text-canil-text-muted">
                 Nenhum cão cadastrado.
               </td>
             </tr>

@@ -22,13 +22,32 @@ export interface Lookup {
   ativo: boolean;
 }
 
+export type TipoRegistroSaude = 'VACINA' | 'CONSULTA' | 'EXAME' | 'OUTRO';
+
+export interface RegistroSaude {
+  id: string;
+  caoId: string;
+  tipo: TipoRegistroSaude;
+  descricao: string;
+  data: string;
+  proximaData: string | null;
+  veterinario: string | null;
+  observacoes: string | null;
+  createdAt: string;
+}
+
 export interface Cao {
   id: string;
   nome: string;
   raca: string;
   sexo: 'MACHO' | 'FEMEA';
+  dataNascimento?: string;
+  registro?: string;
   status: string;
   especialidade: Lookup;
+  // Lista resumida (geralmente só a última vacina) vinda do endpoint de
+  // listagem, pra sinalizar vacina vencida sem carregar o histórico todo.
+  registrosSaude?: RegistroSaude[];
 }
 
 export interface Binomio {
