@@ -5,6 +5,7 @@ import { useSessao } from '@/lib/use-sessao';
 import { apiFetch } from '@/lib/api';
 import type { Apreensao, TipoEventoOcorrencia } from '@/lib/types';
 import { IconMap, IconPaw, IconShield, IconTarget } from '../../icons';
+import { gerarRelatorioPdf } from './relatorio-pdf';
 
 const TIPO_ROTULO: Record<string, string> = {
   ENTORPECENTE: 'Entorpecente',
@@ -96,6 +97,51 @@ export default function DashboardPage() {
     [filtradas],
   );
 
+  // Evolução mês a mês (últimos 12 meses) — independente do filtro de
+  // período acima, pra mostrar tendência em vez de só a foto do momento.
+  const evolucaoMensal = useMemo(() => {
+    const agora = new Date();
+    const meses = Array.from({ length: 12 }, (_, i) => {
+      const data = new Date(agora.getFullYear(), agora.getMonth() - (11 - i), 1);
+      return {
+        chave: `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`,
+        rotulo: data.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+        total: 0,
+      };
+    });
+    for (const a of apreensoes) {
+      const data = new Date(a.horario);
+      const chave = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`;
+      const mes = meses.find((m) => m.chave === chave);
+      if (mes) mes.total++;
+    }
+    return meses;
+  }, [apreensoes]);
+
+  const maiorMes = Math.max(1, ...evolucaoMensal.map((m) => m.total));
+
+  const comparativoMensal = useMemo(() => {
+    const atual = evolucaoMensal[evolucaoMensal.length - 1]?.total ?? 0;
+    const anterior = evolucaoMensal[evolucaoMensal.length - 2]?.total ?? 0;
+    if (anterior === 0) return null;
+    return { atual, anterior, variacao: ((atual - anterior) / anterior) * 100 };
+  }, [evolucaoMensal]);
+
+  function handleExportarPdf() {
+    gerarRelatorioPdf({
+      periodoRotulo: periodo === 'tudo' ? 'Todo o período' : 'Este mês',
+      totalApreensoes: filtradas.length,
+      valorTotalFormatado: formatadorMoeda.format(valorTotal),
+      caoDestaque: rankingCaes[0]?.[0] ?? '—',
+      binomioDestaque: rankingBinomios[0]?.[0] ?? '—',
+      porTipo: porTipo.map(([k, v]) => [TIPO_ROTULO[k] ?? k, v]),
+      porEvento: porEvento.map(([k, v]) => [EVENTO_ROTULO[k as TipoEventoOcorrencia] ?? k, v]),
+      rankingCaes,
+      rankingBinomios,
+      evolucaoMensal: evolucaoMensal.map((m) => ({ rotulo: m.rotulo, total: m.total })),
+    });
+  }
+
   if (!sessao) return null;
 
   return (
@@ -105,18 +151,26 @@ export default function DashboardPage() {
           <h1 className="text-xl font-semibold text-canil-text">Indicadores</h1>
           <p className="text-sm text-canil-text-muted">Visão geral das apreensões do pelotão</p>
         </div>
-        <div className="flex rounded border border-canil-border bg-canil-bg-elevated p-1 text-xs">
-          {(['tudo', 'mes'] as const).map((opcao) => (
-            <button
-              key={opcao}
-              onClick={() => setPeriodo(opcao)}
-              className={`rounded px-3 py-1.5 font-medium ${
-                periodo === opcao ? 'bg-canil-gold text-canil-bg' : 'text-canil-text-muted'
-              }`}
-            >
-              {opcao === 'tudo' ? 'Todo o período' : 'Este mês'}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          <div className="flex rounded border border-canil-border bg-canil-bg-elevated p-1 text-xs">
+            {(['tudo', 'mes'] as const).map((opcao) => (
+              <button
+                key={opcao}
+                onClick={() => setPeriodo(opcao)}
+                className={`rounded px-3 py-1.5 font-medium ${
+                  periodo === opcao ? 'bg-canil-gold text-canil-bg' : 'text-canil-text-muted'
+                }`}
+              >
+                {opcao === 'tudo' ? 'Todo o período' : 'Este mês'}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={handleExportarPdf}
+            className="rounded border border-canil-gold px-3 py-1.5 text-xs font-semibold text-canil-gold"
+          >
+            Exportar PDF
+          </button>
         </div>
       </header>
 
@@ -153,6 +207,42 @@ export default function DashboardPage() {
           {rankingBinomios[0] && (
             <p className="text-xs text-canil-text-muted">{rankingBinomios[0][1]} apreensões</p>
           )}
+        </div>
+      </section>
+
+      {/* Evolução mensal */}
+      <section className="rounded border border-canil-border bg-canil-bg-elevated p-4">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-semibold tracking-wide text-canil-text">
+            Evolução mensal (últimos 12 meses)
+          </h2>
+          {comparativoMensal && (
+            <span
+              className={`rounded border px-2 py-0.5 text-xs font-medium ${
+                comparativoMensal.variacao >= 0
+                  ? 'border-canil-gold text-canil-gold'
+                  : 'border-red-700 text-red-400'
+              }`}
+            >
+              {comparativoMensal.variacao >= 0 ? '+' : ''}
+              {comparativoMensal.variacao.toFixed(0)}% vs mês anterior
+            </span>
+          )}
+        </div>
+        <div className="flex h-32 items-end gap-2">
+          {evolucaoMensal.map((m) => (
+            <div key={m.chave} className="flex flex-1 flex-col items-center gap-1">
+              <div className="flex h-24 w-full items-end">
+                <div
+                  className="w-full rounded-t bg-canil-gold"
+                  style={{ height: `${(m.total / maiorMes) * 100}%`, minHeight: m.total > 0 ? '4px' : 0 }}
+                  title={`${m.total} apreensões`}
+                />
+              </div>
+              <span className="text-[10px] text-canil-text-muted">{m.rotulo}</span>
+              <span className="text-[10px] font-medium text-canil-text">{m.total}</span>
+            </div>
+          ))}
         </div>
       </section>
 

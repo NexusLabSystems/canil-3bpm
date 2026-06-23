@@ -9,6 +9,7 @@ import { IconShield } from '../icons';
 
 const LINKS = [
   { href: '/painel/dashboard', rotulo: 'Dashboard' },
+  { href: '/painel/mapa', rotulo: 'Mapa de calor' },
   { href: '/painel/validacao', rotulo: 'Caixa de validação' },
   { href: '/painel/cadastros/caes', rotulo: 'Cães' },
   { href: '/painel/cadastros/condutores', rotulo: 'Condutores' },
